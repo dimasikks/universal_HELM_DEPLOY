@@ -1,0 +1,104 @@
+# Почти одинаковый синтаксис с docker, gitlab, k8s - главное выдерживать пробелы и 
+# стараться не нарушать табуляцию (helm очень сильно ругается на это, ошибку с пробелами
+# крайне тяжело найти на этапе проверки). По сути описываем содержимое как в манифестах.
+# Главное смотреть в какой секции какие настройки находятся, и тогда проблем не будет
+
+# Далее предоставлен пример по заполнению файла values.yml,
+# здесь приведен набор переменных и правила их заполнения, этот файл не относится к какому-либо
+# приложению, это общий файл для понимания работы helm
+
+# секция с ссылками, якоря - используется для повторения кода в секциях ниже
+anchors: &all
+  image: alpine:latest
+  imagePullPolicy: Always
+  volumeMounts:
+    - name: cache
+      mountPath: /opt/app/tmp/cache
+    - name: pids
+      mountPath: /opt/app/tmp/pids
+    - name: sockets
+      mountPath: /opt/app/tmp/sockets
+    - name: storage
+      mountPath: /opt/app/tmp/storage
+  envFrom:
+    - configMapRef:
+        name: test-configmap
+
+# секция, описывающая состояние пода, далее подробней
+# здесь нет configmap поскольку он реализуется на уровне пайплайна, а не в helm шаблонизаторе
+main:
+  deployment: # тип ресурса, если такой ресурс есть в приложении - ставим true + заполняем name
+    enabled: true
+    name: "test-app"
+  statefulset: # если ресурс не используется, ставим false, в name ставим ""
+    enabled: false
+    name: ""
+  service:
+    enabled: true
+    name: "test-app-service"
+
+# секция, описывающая сам под, здесь находятся все компоненты, которые относятся к поду
+# в данном примере некоторые переменные перенесены в anchors для того чтобы показать 
+# что можно использовать якоря в конфигурации, но без якорей они ОБЯЗАТЕЛЬНО должны быть
+# занесены в секцию pod, иначе шаблонизатор отработает некорректно
+pod:
+  name: "test-app" # название пода
+  replicaCount: 1 # количество реплик - не меняем
+  imagePullSecretsName: gitlab-access # ключ доступа - не меняем
+  annotations: # аннотации, если нужны, пока что такие аннотации есть только для микросервиса ceph
+    k8s.v1.cni.cncf.io/networks: |
+      [
+        {
+          "name": "ceph-conf-ipv4"
+        }
+      ]
+    test.annotation.check: "crd.hello->check-template"
+  nodeSelector: # метки на ноды, от некоторых зависит работа приложения, уточнять у инженера
+    oshs_front: front
+    test: test
+
+  containers: # характеристика контейнеров, полный аналог по синтаксису с манифестами k8s
+    - name: test-app
+      command: 'some command'
+      ports:
+        - containerPort: 3000
+        - containerPort: 9293
+      <<: *all # используем вставку шаблона anchors по адресу all
+    - name: service-bus-consumer
+      command: '["rake", "service_bus_client:start"]' # использование '' для обособления обязательно, иначе helm неправильно воспримет command и выдаст ошибку
+      <<: *all
+    - name: sidekiq
+      command: '["bundle", "exec", "sidekiq"]'
+      <<: *all
+    - name: test-container
+      command: '["hellow", "worldi"]'
+      env:
+        - name: CHECK
+          value: TEST
+        - name: check
+          value: test
+
+  volumes:
+    - name: cache
+      emptyDir:
+        medium: Memory
+    - name: pids
+      emptyDir:
+        medium: Memory
+    - name: sockets
+      emptyDir:
+        medium: Memory
+    - name: storage
+      emptyDir:
+        medium: Memory
+
+# секция, описывающая сервис, если он, конечно, нужен для работы микросервиса
+service:
+  type: ClusterIP
+  ports:
+  - name: '"3900"'
+    port: 3900
+    targetPort: 3000
+  - name: '"9594"'
+    port: 9594
+    targetPort: 9293

@@ -1,0 +1,76 @@
+{{- if .Values.main.deployment.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.main.deployment.name }}
+spec:
+  replicas: {{ .Values.pod.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.pod.name }}
+  template:
+    metadata:
+      {{- if .Values.pod.annotations }}
+      annotations:
+        {{- toYaml .Values.pod.annotations | nindent 8 }}
+      {{- end }}
+      labels:
+        app: {{ .Values.pod.name }}
+    spec:
+      {{- if .Values.pod.nodeSelector }}
+      nodeSelector:
+        {{- range $n1, $n2 := .Values.pod.nodeSelector }}
+        {{ $n1 }}: {{ $n2 }}
+        {{- end}}
+      {{- end }}
+      containers:
+        {{- range .Values.pod.containers }}
+        - name: {{ .name }}
+          image: {{ .image }}
+          imagePullPolicy: {{ .imagePullPolicy }}
+          {{- if .command }}
+          command: {{ .command }}
+          {{- end }}
+          {{- with .ports }}
+          ports:
+            {{- range . }}
+            - containerPort: {{ .containerPort }}
+            {{- end }}
+          {{- end }}
+          {{- with .volumeMounts}}
+          volumeMounts:
+            {{- range . }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+            {{- end }}
+          {{- end}}
+          {{- with .env }}
+          env:
+            {{- range . }}
+            - name: {{ .name }}
+              value: {{ .value }}
+            {{- end }}
+          {{- end }}
+          {{- with .envFrom }}
+          envFrom:
+            {{- range . }}
+            - configMapRef:
+                name: {{ .configMapRef.name }}
+            {{- end }}
+          {{- end }}
+        {{ end }}
+      {{- with .Values.pod.volumes }}
+      volumes:
+        {{- range . }}
+        - name: {{ .name }}
+          {{- with .emptyDir }}
+          emptyDir:
+            medium: Memory
+          {{- end }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.pod.imagePullSecretsName }}
+      imagePullSecrets:
+        - name: {{ .Values.pod.imagePullSecretsName }}
+      {{- end }}
+{{- end }}

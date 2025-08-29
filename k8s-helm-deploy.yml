@@ -1,0 +1,19 @@
+include:
+  - local: k8s-configuration.yml
+
+helm_deploy:
+  stage: helm_deploy
+  before_script:
+    - mkdir ~/.ssh; chmod 600 ~/.ssh
+    - ssh-keyscan $K8S_NODE | tee -a ~/.ssh/known_hosts
+    - eval $(ssh-agent -s)
+    - echo "$K8S_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+  script:
+    - ssh "$K8S_USER"@"$K8S_NODE" "mkdir -p $K8S_DIR/$APP"
+    - scp -r deploy/* "$K8S_USER"@"$K8S_NODE":"$K8S_DIR/$APP"
+    - if [ $CONFIGMAP != "null" ]; then
+        ssh "$K8S_USER"@"$K8S_NODE" "cd $K8S_DIR/$APP; kubectl create configmap --from-env-file=./configmap.env --dry-run=client $CONFIGMAP -o yaml | kubectl apply -f -";
+      fi
+    - ssh "$K8S_USER"@"$K8S_NODE" "sed -i '/^name/c\name:\ $RELEASE' $K8S_DIR/Chart/Chart.yaml"
+    - ssh "$K8S_USER"@"$K8S_NODE" "cd $K8S_DIR/$APP; helm upgrade --install -f values.yml $RELEASE $K8S_DIR/Chart"
+    - ssh "$K8S_USER"@"$K8S_NODE" "sleep 30; helm list"

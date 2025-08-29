@@ -1,0 +1,7 @@
+variables:
+    K8S_NODE: 
+        value: [MASKED]
+    K8S_USER: 
+        value: [MASKED]
+    K8S_DIR:
+        value: [MASKED]

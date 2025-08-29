@@ -1,0 +1,15 @@
+# Подключение конфигурационного файла k8s-deploy-micro.yml для деплоя микросервиса в k8s
+include:
+  - project: path/to/your/project/in/gitlab/ci
+    file: k8s-helm-deploy.yml
+
+# Задание необходимых переменных для k8s-deploy-micro.yml
+variables:
+  APP: "/path/to/directory" # папка, в которую развернется микросервис (например, "test")
+  RELEASE: "release_name" # имя, которое будет идентифицировать приложение среди других helm релизов (например, "test-app") - используется как и название приложения в Chart.yml
+  CONFIGMAP: "null"               # <- этот варинт, если приложению не нужен configmap
+  CONFIGMAP: "name of configmap"  # <- этот вариант, если нужен, указываем имя, которое указали в values.yml этого же приложения
+
+# Добавление в stages необходимой стадии ("helm_deploy") для возможности запуска деплоя из k8s-helm-deploy.yml
+stages:
+  - helm_deploy
